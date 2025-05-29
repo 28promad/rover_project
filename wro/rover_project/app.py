@@ -13,6 +13,7 @@ app = Flask(__name__)
 current_frame = None
 video_available = False
 detection_results = {}
+use_pi_camera = False # Set to True if using Raspberry Pi camera
 
 # Color detection ranges (HSV)
 COLOR_RANGES = {
@@ -111,64 +112,68 @@ def index():
 
 @app.route('/send-video', methods=['GET', 'POST'])
 def send_video():
-    """
-    Handle video stream from mobile client or AI camera
-    """
     global current_frame, video_available, detection_results
-    
     if request.method == 'POST':
-        # Receive video frame from mobile client
         data = request.get_json()
-        
         if 'frame' in data:
             try:
-                # Decode base64 image
                 img_data = base64.b64decode(data['frame'].split(',')[1])
                 nparr = np.frombuffer(img_data, np.uint8)
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                
+                # Resize to 320x240 for lower latency
+                frame = cv2.resize(frame, (320, 240))
                 current_frame = frame
                 video_available = True
-                
-                # Detect objects in frame
                 detection_results = detect_colored_objects(frame)
-                
                 return jsonify({'status': 'success', 'detection': detection_results})
             except Exception as e:
                 return jsonify({'status': 'error', 'message': str(e)})
-    
-    # GET request - return video upload page
     return render_template('send_video.html')
+
+
+# --- Pi Camera Thread ---
+def pi_camera_stream():
+    global current_frame, video_available, detection_results
+    cap = cv2.VideoCapture(0)  # 0 is usually the Pi camera
+    while use_pi_camera:
+        ret, frame = cap.read()
+        if ret:
+            # Resize for lower latency
+            frame = cv2.resize(frame, (320, 240))
+            current_frame = frame
+            video_available = True
+            detection_results = detect_colored_objects(frame)
+        time.sleep(0.05)  # ~20 FPS
+    cap.release()
+
+# Start Pi camera thread if enabled
+if use_pi_camera:
+    threading.Thread(target=pi_camera_stream, daemon=True).start()
+
 
 @app.route('/video_feed')
 def video_feed():
-    """
-    Stream current video frame
-    """
     def generate():
         global current_frame, video_available
-        
         while True:
             if video_available and current_frame is not None:
-                # Encode frame as JPEG
-                ret, buffer = cv2.imencode('.jpg', current_frame)
+                # Ensure playback is also 320x240
+                frame = cv2.resize(current_frame, (320, 240))
+                ret, buffer = cv2.imencode('.jpg', frame)
                 if ret:
                     frame_bytes = buffer.tobytes()
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             else:
-                # Send placeholder image
-                placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(placeholder, 'No Video Available', (150, 240), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                placeholder = np.zeros((240, 320, 3), dtype=np.uint8)
+                cv2.putText(placeholder, 'No Video Available', (30, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 ret, buffer = cv2.imencode('.jpg', placeholder)
                 if ret:
                     frame_bytes = buffer.tobytes()
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
-            time.sleep(0.05)  # 10 FPS
-    
+            time.sleep(0.05)  # 20 FPS
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/logs')

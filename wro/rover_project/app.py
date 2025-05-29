@@ -167,7 +167,7 @@ def video_feed():
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             
-            time.sleep(0.1)  # 10 FPS
+            time.sleep(0.05)  # 10 FPS
     
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 

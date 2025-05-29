@@ -51,7 +51,7 @@ class UltrasonicSensor:
         # Calculate distance
         pulse_duration = pulse_end - pulse_start
         distance = pulse_duration * 17150  # Speed of sound = 34300 cm/s, divide by 2
-        distance = round(distance, 2)
+        distance = int(distance)
         
         return distance
     
@@ -135,7 +135,7 @@ class UltrasonicSensor:
 # Example usage
 if __name__ == "__main__":
     # Initialize sensor
-    sensor = UltrasonicSensor(trig_pin=18, echo_pin=24, detection_distance=15)
+    sensor = UltrasonicSensor(trig_pin=27, echo_pin=22, detection_distance=100)
     
     # Single measurement
     distance = sensor.measure_distance()
@@ -149,4 +149,4 @@ if __name__ == "__main__":
         print(f"No object detected. Distance: {dist}cm")
     
     # Start continuous monitoring
-    # sensor.continuous_monitoring(interval=0.5)
+    sensor.continuous_monitoring(interval=0.5)xx

@@ -109,19 +109,15 @@ function updateStatus() {
 // Update every 3 seconds
 setInterval(updateStatus, 3000);
 updateStatus();
-
 function updateDistance() {
     fetch('/api/distance')
         .then(response => response.json())
         .then(data => {
-            // Add an element with id="distance-reading" in your HTML if not present
-            document.getElementById('distance-reading').textContent = 
+            document.getElementById('distance-reading').textContent =
                 `Distance: ${data.distance_cm !== null ? data.distance_cm + ' cm' : '--'}`;
         });
 }
-
-setInterval(updateDistance, 2000);
+setInterval(updateDistance, 1000); // Update every second
 updateDistance();
-
 </script>
 {% endblock %}

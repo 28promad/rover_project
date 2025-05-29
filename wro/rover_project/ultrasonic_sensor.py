@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class UltrasonicSensor:
-    def __init__(self, trig_pin=18, echo_pin=24, detection_distance=20):
+    def __init__(self, trig_pin=18, echo_pin=24, detection_distance=100):
         """
         Initialize ultrasonic sensor
         
@@ -143,10 +143,21 @@ if __name__ == "__main__":
     
     # Check for object detection
     detected, dist = sensor.detect_object()
+    while True:
+        detected, dist = sensor.detect_object()
+        sensor.log_detection(dist, detected=detected)
+        print(f"Distance: {dist}cm, Detected: {detected}")
+        
+        # Break loop if object is detected
+        if detected:
+            break
+        
+        time.sleep(1)
+    """ 
     if detected:
         print(f"Object detected at {dist}cm!")
     else:
         print(f"No object detected. Distance: {dist}cm")
-    
+     """
     # Start continuous monitoring
-    sensor.continuous_monitoring(interval=0.5)
+    # sensor.continuous_monitoring(interval=0.5)

@@ -1,0 +1,124 @@
+<!-- send_video.html -->
+{% extends "base.html" %}
+
+{% block title %}Send Video - Mining Rover{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Mobile Camera Stream</h2>
+        <div class="video-container">
+            <video id="video" width="100%" height="auto" autoplay class="border rounded"></video>
+        </div>
+        
+        <div class="mt-3 text-center">
+            <button id="start-btn" class="btn btn-success">Start Camera</button>
+            <button id="stop-btn" class="btn btn-danger" disabled>Stop Camera</button>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <h4>Stream Status</h4>
+        <div class="card">
+            <div class="card-body">
+                <p id="stream-status">Ready to start</p>
+                <p><small id="frame-count">Frames sent: 0</small></p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6>Instructions</h6>
+            </div>
+            <div class="card-body">
+                <small>
+                    1. Click "Start Camera" to begin<br>
+                    2. Point camera at colored paper<br>
+                    3. System will detect materials<br>
+                    4. Check the Manage page for results
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let video = document.getElementById('video');
+let canvas = document.createElement('canvas');
+let ctx = canvas.getContext('2d');
+let streaming = false;
+let frameCount = 0;
+
+document.getElementById('start-btn').addEventListener('click', startCamera);
+document.getElementById('stop-btn').addEventListener('click', stopCamera);
+
+function startCamera() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.play();
+            streaming = true;
+            
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('stream-status').textContent = 'Streaming...';
+            
+            // Start sending frames
+            sendFrames();
+        })
+        .catch(function(err) {
+            console.error('Error accessing camera:', err);
+            alert('Could not access camera. Please check permissions.');
+        });
+}
+
+function stopCamera() {
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+    }
+    streaming = false;
+    
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('stream-status').textContent = 'Stopped';
+}
+
+function sendFrames() {
+    if (!streaming) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    
+    let dataURL = canvas.toDataURL('image/jpeg', 0.7);
+    
+    fetch('/send-video', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            frame: dataURL
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        frameCount++;
+        document.getElementById('frame-count').textContent = `Frames sent: ${frameCount}`;
+        
+        if (data.detection && data.detection.detected) {
+            document.getElementById('stream-status').innerHTML = 
+                `Streaming... <br><small class="text-success">Detected: ${data.detection.material}</small>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error sending frame:', error);
+    });
+    
+    // Send next frame after delay
+    setTimeout(sendFrames, 500); // 2 FPS
+}
+</script>
+{% endblock %}

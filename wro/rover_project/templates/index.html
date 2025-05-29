@@ -92,8 +92,22 @@ document.getElementById('mine-btn').addEventListener('click', function() {
     });
 });
 
+function updateDistance() {
+    fetch('/api/distance')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('distance-reading').textContent = 
+                `Distance: ${data.distance_cm !== null ? data.distance_cm + ' cm' : '--'}`;
+        });
+}
+
+// Call every 2 seconds
+setInterval(updateDistance, 2500);
+updateDistance();
+
+
 // Update status every 2 seconds
-setInterval(updateStatus, 2000);
+setInterval(updateStatus, 5000);
 updateStatus();
 </script>
 {% endblock %}

@@ -6,6 +6,7 @@ import base64
 from datetime import datetime
 import threading
 import time
+from ultrasonic_sensor import UltrasonicSensor
 
 app = Flask(__name__)
 
@@ -14,6 +15,17 @@ current_frame = None
 video_available = False
 detection_results = {}
 use_pi_camera = False # Set to True if using Raspberry Pi camera
+# Initialize the sensor (adjust pins as needed)
+sensor = UltrasonicSensor(trig_pin=18, echo_pin=24, detection_distance=20)
+
+
+@app.route('/api/distance')
+def api_distance():
+    try:
+        distance = sensor.measure_distance()
+        return jsonify({'distance_cm': distance})
+    except Exception as e:
+        return jsonify({'distance_cm': None, 'error': str(e)})
 
 # Color detection ranges (HSV)
 COLOR_RANGES = {

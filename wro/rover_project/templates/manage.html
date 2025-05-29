@@ -12,7 +12,8 @@
         <h4>Live Video Feed</h4>
         <div class="video-container">
             {% if video_available %}
-                <img src="/video_feed" class="img-fluid border rounded" alt="Live Feed">
+                <p id="distance-reading">Distance: -- cm</p>
+                <!-- <img src="/video_feed" class="img-fluid border rounded" alt="Live Feed"> -->
             {% else %}
                 <div class="border rounded p-5 text-center bg-light">
                     <p>No video available</p>
@@ -108,5 +109,19 @@ function updateStatus() {
 // Update every 3 seconds
 setInterval(updateStatus, 3000);
 updateStatus();
+
+function updateDistance() {
+    fetch('/api/distance')
+        .then(response => response.json())
+        .then(data => {
+            // Add an element with id="distance-reading" in your HTML if not present
+            document.getElementById('distance-reading').textContent = 
+                `Distance: ${data.distance_cm !== null ? data.distance_cm + ' cm' : '--'}`;
+        });
+}
+
+setInterval(updateDistance, 2000);
+updateDistance();
+
 </script>
 {% endblock %}

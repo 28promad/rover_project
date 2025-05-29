@@ -1,0 +1,99 @@
+
+<!-- index.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>Mining Rover Control Panel</h2>
+        <div class="video-container">
+            <img src="/video_feed" class="img-fluid border rounded" alt="Rover Camera Feed">
+        </div>
+        
+        <div class="detection-info mt-3">
+            <h5>Current Detection Status</h5>
+            <div id="detection-status">
+                <span class="badge bg-secondary">Initializing...</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <h4>Rover Status</h4>
+        <div class="card">
+            <div class="card-body">
+                <h6>Ultrasonic Sensor</h6>
+                <p id="distance-reading">Distance: -- cm</p>
+                
+                <h6>Camera Status</h6>
+                <p id="camera-status">Checking...</p>
+                
+                <h6>Last Detection</h6>
+                <p id="last-detection">None</p>
+                
+                <button id="mine-btn" class="btn btn-warning btn-sm" disabled>
+                    ⛏️ Start Mining
+                </button>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6>Material Guide</h6>
+            </div>
+            <div class="card-body">
+                <small>
+                    🔴 Red Paper = Palladium<br>
+                    🟤 Brown Paper = Dirt<br>
+                    🟢 Green Paper = Copper
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateStatus() {
+    fetch('/api/detection')
+        .then(response => response.json())
+        .then(data => {
+            const statusDiv = document.getElementById('detection-status');
+            const mineBtn = document.getElementById('mine-btn');
+            const lastDetection = document.getElementById('last-detection');
+            
+            if (data.detected) {
+                statusDiv.innerHTML = `
+                    <span class="badge bg-success">Material Detected</span>
+                    <br><small>Type: ${data.material} (${data.confidence}% confidence)</small>
+                `;
+                lastDetection.textContent = `${data.material} - ${data.color} paper`;
+                mineBtn.disabled = false;
+            } else {
+                statusDiv.innerHTML = '<span class="badge bg-warning">Scanning...</span>';
+                mineBtn.disabled = true;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+document.getElementById('mine-btn').addEventListener('click', function() {
+    fetch('/api/mine', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({distance: 15}) // Mock distance
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+    });
+});
+
+// Update status every 2 seconds
+setInterval(updateStatus, 2000);
+updateStatus();
+</script>
+{% endblock %}

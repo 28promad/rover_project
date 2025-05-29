@@ -1,0 +1,59 @@
+
+<!-- logs.html -->
+{% extends "base.html" %}
+
+{% block title %}Logs - Mining Rover{% endblock %}
+
+{% block content %}
+<h2>Mining Rover Logs</h2>
+
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <p class="mb-0">Total entries: {{ logs|length }}</p>
+            <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                🔄 Refresh
+            </button>
+        </div>
+        
+        {% if logs %}
+            {% for log in logs|reverse %}
+            <div class="log-entry {% if log.material_type %}material-{{ log.material_type }}{% endif %}">
+                <div class="d-flex justify-content-between">
+                    <h6 class="mb-1">
+                        {% if log.material_detected %}
+                            ⛏️ Mining Operation
+                        {% else %}
+                            🔍 Scan Result
+                        {% endif %}
+                    </h6>
+                    <small class="text-muted">{{ log.timestamp[:19] }}</small>
+                </div>
+                
+                <p class="mb-1">
+                    <strong>Distance:</strong> {{ log.distance_cm }}cm
+                    {% if log.material_type %}
+                        | <strong>Material:</strong> {{ log.material_type }}
+                        {% if log.confidence %}
+                            ({{ log.confidence }}% confidence)
+                        {% endif %}
+                    {% endif %}
+                </p>
+                
+                <small class="text-muted">
+                    Action: {{ log.action }}
+                    {% if log.within_range is defined %}
+                        | Within range: {{ 'Yes' if log.within_range else 'No' }}
+                    {% endif %}
+                </small>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-5">
+                <p class="text-muted">No logs available yet.</p>
+                <p><small>Start the rover to begin logging operations.</small></p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

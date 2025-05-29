@@ -1,3 +1,4 @@
+
 <!-- manage.html -->
 {% extends "base.html" %}
 
@@ -122,5 +123,27 @@ function updateDistance() {
 setInterval(updateDistance, 2000);
 updateDistance();
 
+</script>
+<script>
+const ws = new WebSocket('ws://localhost:8765');
+
+ws.onopen = function() {
+    console.log('WebSocket connected');
+};
+
+// Receive messages (distance, detection, etc.)
+ws.onmessage = function(event) {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'distance') {
+        document.getElementById('distance-reading').textContent =
+            `Distance: ${msg.distance_cm} cm`;
+    }
+    // Handle other message types as needed
+};
+
+// To send video frames from the browser (e.g., in send_video.html)
+function sendFrame(dataUrl) {
+    ws.send(JSON.stringify({type: 'frame', data: dataUrl}));
+}
 </script>
 {% endblock %}

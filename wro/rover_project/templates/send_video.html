@@ -85,41 +85,16 @@ function stopCamera() {
     document.getElementById('stop-btn').disabled = true;
     document.getElementById('stream-status').textContent = 'Stopped';
 }
-
 function sendFrames() {
     if (!streaming) return;
-    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
-    
     let dataURL = canvas.toDataURL('image/jpeg', 0.7);
-    
-    fetch('/send-video', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            frame: dataURL
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        frameCount++;
-        document.getElementById('frame-count').textContent = `Frames sent: ${frameCount}`;
-        
-        if (data.detection && data.detection.detected) {
-            document.getElementById('stream-status').innerHTML = 
-                `Streaming... <br><small class="text-success">Detected: ${data.detection.material}</small>`;
-        }
-    })
-    .catch(error => {
-        console.error('Error sending frame:', error);
-    });
-    
-    // Send next frame after delay
+    sendFrame(dataURL); // Use the WebSocket sendFrame function above
     setTimeout(sendFrames, 500); // 2 FPS
 }
+
+
 </script>
 {% endblock %}

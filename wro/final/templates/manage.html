@@ -1,0 +1,123 @@
+
+<!-- manage.html -->
+{% extends "base.html" %}
+
+{% block title %}Manage - Mining Rover{% endblock %}
+
+{% block content %}
+<h2>Rover Management</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <h4>Live Video Feed</h4>
+        <div class="video-container">
+            {% if video_available %}
+                <p id="distance-reading">Distance: -- cm</p>
+                <!-- <img src="/video_feed" class="img-fluid border rounded" alt="Live Feed"> -->
+            {% else %}
+                <div class="border rounded p-5 text-center bg-light">
+                    <p>No video available</p>
+                    <small>Connect via <a href="/send-video">Send Video</a></small>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <h4>Current Status</h4>
+        <div id="current-status" class="detection-info">
+            Loading...
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <h4>Recent Log Data</h4>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Distance</th>
+                        <th>Material</th>
+                        <th>Confidence</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-table">
+                    {% for log in logs[-10:] %}
+                    <tr>
+                        <td>{{ log.timestamp[:19] }}</td>
+                        <td>{{ log.distance_cm }}cm</td>
+                        <td>
+                            {% if log.material_type %}
+                                <span class="badge bg-info">{{ log.material_type }}</span>
+                            {% else %}
+                                <span class="text-muted">None</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.confidence %}
+                                {{ log.confidence }}%
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if log.action == 'mining' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateStatus() {
+    fetch('/api/detection')
+        .then(response => response.json())
+        .then(data => {
+            const statusDiv = document.getElementById('current-status');
+            
+            if (data.detected) {
+                statusDiv.innerHTML = `
+                    <h5 class="text-success">✅ Material Detected</h5>
+                    <p><strong>Type:</strong> ${data.material}</p>
+                    <p><strong>Color:</strong> ${data.color}</p>
+                    <p><strong>Confidence:</strong> ${data.confidence}%</p>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <h5 class="text-warning">🔍 Scanning</h5>
+                    <p>No valuable materials detected in current frame</p>
+                `;
+            }
+        })
+        .catch(error => {
+            document.getElementById('current-status').innerHTML = 
+                '<h5 class="text-danger">❌ Error</h5><p>Could not fetch status</p>';
+        });
+}
+
+// Update every 3 seconds
+setInterval(updateStatus, 3000);
+updateStatus();
+function updateDistance() {
+    fetch('/api/distance')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('distance-reading').textContent =
+                `Distance: ${data.distance_cm !== null ? data.distance_cm + ' cm' : '--'}`;
+        });
+}
+setInterval(updateDistance, 1000); // Update every second
+updateDistance();
+</script>
+{% endblock %}

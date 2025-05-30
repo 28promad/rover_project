@@ -40,9 +40,9 @@ def initialize_system():
         # Initialize LED controller
         led_pins = {
             'red': 12,    # Red color detection
-            'green': 16,  # Green color detection  
-            'blue': 20,   # Brown color detection (using blue LED)
-            'status': 21  # System status
+            'green': 16  # Green color detection  
+            # 'blue': 20,   # Brown color detection (using blue LED)
+            # 'status': 21  # System status
         }
         led_controller = LEDController(led_pins)
         
@@ -61,6 +61,11 @@ def initialize_system():
         led_controller.test_all_leds(0.3)
         led_controller.set_system_status('ready')
         
+        # In initialize_system(), after LED controller initialization:
+        # Initialize LEDs to default state (red on, green off)
+        led_controller.turn_on('red')
+        led_controller.turn_off('green')
+
         # Start sensor monitoring thread
         sensor_thread = threading.Thread(target=sensor_monitor_thread, daemon=True)
         sensor_thread.start()
@@ -85,8 +90,36 @@ def handle_color_detection(detection_result):
         material = detection_result['material']
         
         logger.log_color_detection(color, material, confidence, True)
-        led_controller.handle_color_detection(color, confidence)
-        print(f"🎯 {color.upper()} detected: {material} ({confidence:.1f}%)")
+        update_led_state()  # Update LED states
+        print(f"🎯 Material detected: {material} ({confidence:.1f}%)")
+
+
+# Add this function after handle_color_detection()
+def update_led_state():
+    """Update LED states based on detection and distance"""
+    global current_detection, current_distance, led_controller
+    
+    if not led_controller:
+        return
+        
+    # Check if we have valid distance reading
+    if current_distance is None:
+        led_controller.turn_on('red')
+        led_controller.turn_off('green')
+        return
+        
+    # Check detection conditions
+    is_close = current_distance <= 15  # 15 cm threshold
+    is_dirt = current_detection.get('material') == 'dirt'
+    
+    if is_close and not is_dirt:
+        # Object detected close by and it's not dirt - show green
+        led_controller.turn_on('green')
+        led_controller.turn_off('red')
+    else:
+        # Default state or dirt detected - show red
+        led_controller.turn_on('red')
+        led_controller.turn_off('green')
 
 def sensor_monitor_thread():
     """Background thread to monitor ultrasonic sensor"""
@@ -100,6 +133,7 @@ def sensor_monitor_thread():
                     current_distance = distance
                     detected = distance <= sensor.detection_distance
                     logger.log_sensor_data(distance, detected)
+                    update_led_state()  # Update LED states
                 time.sleep(0.5)  # Update every 500ms
         except Exception as e:
             logger.log_system_event('error', f'Sensor error: {str(e)}')

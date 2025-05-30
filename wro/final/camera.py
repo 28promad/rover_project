@@ -3,7 +3,7 @@ import numpy as np
 import threading
 import time
 from typing import Optional, Tuple, Callable
-from color_detector import ColorDetector
+from color import ColorDetector
 
 class CameraHandler:
     def __init__(self, camera_index: int = 0, resolution: Tuple[int, int] = (640, 480)):

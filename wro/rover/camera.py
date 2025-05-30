@@ -34,7 +34,20 @@ class CameraHandler:
     def _initialize_camera(self):
         """Initialize camera capture"""
         try:
-            self.cap = cv2.VideoCapture(self.camera_index)
+            if self.camera_index == "picam":
+                # For RPi camera
+                gstreamer_pipeline = (
+                    "libcamerasrc ! "
+                    "video/x-raw, width=(int)%d, height=(int)%d ! "
+                    "videoconvert ! "
+                    "appsink"
+                    % (self.resolution[0], self.resolution[1])
+                )
+                self.cap = cv2.VideoCapture(gstreamer_pipeline, cv2.CAP_GSTREAMER)
+            else:
+                # For USB cameras
+                self.cap = cv2.VideoCapture(self.camera_index)
+                
             if not self.cap.isOpened():
                 raise Exception(f"Could not open camera {self.camera_index}")
             

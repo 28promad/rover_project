@@ -49,7 +49,7 @@ def initialize_system():
         
         # Initialize color detector and camera
         color_detector = ColorDetector()
-        camera_handler = CameraHandler(camera_index=0, resolution=(640, 480))
+        camera_handler = CameraHandler(camera_index="picam", resolution=(640, 480))
         camera_handler.set_detection_callback(handle_color_detection)
         
         # Start camera capture

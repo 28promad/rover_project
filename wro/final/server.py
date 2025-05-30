@@ -9,11 +9,11 @@ from datetime import datetime
 import atexit
 
 # Import our custom modules
-from .ultrasonic import UltrasonicSensor
-from .color import ColorDetector
-from .led import LEDController
-from .data import DataLogger
-from .camera import CameraHandler
+from ultrasonic import UltrasonicSensor
+from color import ColorDetector
+from led import LEDController
+from data import DataLogger
+from camera import CameraHandler
 
 app = Flask(__name__)
 

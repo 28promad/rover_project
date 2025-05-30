@@ -4,39 +4,54 @@ import cv2
 import time
 
 def test_detection():
+    """Test camera and color/material detection"""
+    print("\n=== Testing Camera and Detection ===")
+    
     # Initialize components
-    camera = CameraHandler(camera_index=0, resolution=(640, 480))
+    camera = CameraHandler()  # Using default Pi Camera
     detector = ColorDetector()
     
     def detection_callback(result):
-        print(f"Detection: {result}")
+        """Handle detection events"""
         if result['detected']:
-            print(f"🎯 Material: {result['material']}")
-            print(f"Confidence: {result['confidence']:.1f}%")
-            print(f"Color: {result['color']}")
-            print("-" * 50)
+            material = result['material']
+            color = result['color']
+            confidence = result['confidence']
+            
+            print("\n🎯 Detection:")
+            print(f"Material: {material}")
+            print(f"Color: {color}")
+            print(f"Confidence: {confidence:.1f}%")
+            print("-" * 40)
     
     # Set callback and start camera
     camera.set_detection_callback(detection_callback)
     if not camera.start_capture():
-        print("Failed to start camera!")
+        print("❌ Failed to start camera!")
         return
     
-    print("Test running - Press 'q' to quit")
+    print("\n✓ Camera initialized")
+    print("• Show different materials to test detection")
+    print("• Press 'q' to quit")
+    
     try:
         while True:
-            # Get frame (this will trigger detection callback)
-            frame = camera.get_frame()
+            # Get frame with detection overlay
+            frame = camera.get_current_frame()
             if frame is not None:
                 # Show the frame
-                cv2.imshow('Test Detection', frame)
-                
+                cv2.imshow('Detection Test', frame)
+            
             # Check for quit
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             
             time.sleep(0.1)  # Small delay
             
+    except KeyboardInterrupt:
+        print("\nTest interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Error during test: {e}")
     finally:
         camera.cleanup()
         cv2.destroyAllWindows()

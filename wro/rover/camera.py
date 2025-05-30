@@ -6,12 +6,12 @@ from typing import Optional, Tuple, Callable
 from color import ColorDetector
 
 class CameraHandler:
-    def __init__(self, camera_index: int = 0, resolution: Tuple[int, int] = (640, 480)):
+    def __init__(self, camera_index: str = "picam", resolution: Tuple[int, int] = (640, 480)):
         """
-        Initialize camera handler
+        Initialize camera handler for Pi AI Camera
         
         Args:
-            camera_index: Camera device index (0 for Pi camera)
+            camera_index: Use "picam" for Pi AI Camera
             resolution: Camera resolution (width, height)
         """
         self.camera_index = camera_index
@@ -30,36 +30,25 @@ class CameraHandler:
         self.detection_callback = None
         
         self._initialize_camera()
-    
+
     def _initialize_camera(self):
-        """Initialize camera capture"""
+        """Initialize Pi AI Camera capture"""
         try:
-            if self.camera_index == "picam":
-                # For RPi camera
-                gstreamer_pipeline = (
-                    "libcamerasrc ! "
-                    "video/x-raw, width=(int)%d, height=(int)%d ! "
-                    "videoconvert ! "
-                    "appsink"
-                    % (self.resolution[0], self.resolution[1])
-                )
-                self.cap = cv2.VideoCapture(gstreamer_pipeline, cv2.CAP_GSTREAMER)
-            else:
-                # For USB cameras
-                self.cap = cv2.VideoCapture(self.camera_index)
-                
+            # Simple initialization for Pi Camera
+            self.cap = cv2.VideoCapture(0)
+            
             if not self.cap.isOpened():
-                raise Exception(f"Could not open camera {self.camera_index}")
+                raise Exception("Could not open Pi Camera")
             
             # Set camera properties
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
             self.cap.set(cv2.CAP_PROP_FPS, 30)
             
-            print(f"Camera initialized: {self.resolution[0]}x{self.resolution[1]}")
+            print(f"Pi Camera initialized: {self.resolution[0]}x{self.resolution[1]}")
             
         except Exception as e:
-            print(f"Error initializing camera: {e}")
+            print(f"Error initializing Pi Camera: {e}")
             self.cap = None
     
     def start_capture(self):

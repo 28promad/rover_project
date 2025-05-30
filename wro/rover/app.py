@@ -3,6 +3,7 @@ import cv2
 import time
 import threading
 from datetime import datetime
+import atexit
 
 # Import modular components
 from camera import CameraHandler
@@ -60,7 +61,7 @@ def initialize_system():
         # Test LEDs
         led_controller.test_all_leds(0.3)
         led_controller.set_system_status('ready')
-        
+
         # In initialize_system(), after LED controller initialization:
         # Initialize LEDs to default state (red on, green off)
         led_controller.turn_on('red')

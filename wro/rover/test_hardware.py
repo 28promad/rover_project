@@ -50,36 +50,52 @@ def test_ultrasonic():
 def test_camera_detection():
     """Test camera and color detection"""
     print("\n=== Testing Camera and Color Detection ===")
-    camera = CameraHandler(camera_index=0, resolution=(640, 480))
-    detector = ColorDetector()
-    
-    def detection_callback(result):
-        if result['detected']:
-            print(f"🎯 Detection: {result['material']}")
-            print(f"   Color: {result['color']}")
-            print(f"   Confidence: {result['confidence']:.1f}%")
-    
-    camera.set_detection_callback(detection_callback)
-    if not camera.start_capture():
-        print("Failed to start camera!")
-        return None
-    
-    print("Camera test running - Press 'q' to quit")
-    print("Show different materials to test detection")
     
     try:
+        # Initialize with RPi camera
+        print("Initializing RPi camera...")
+        camera = CameraHandler(camera_index="picam", resolution=(640, 480))
+        detector = ColorDetector()
+        
+        def detection_callback(result):
+            if result['detected']:
+                print(f"🎯 Detection: {result['material']}")
+                print(f"   Color: {result['color']}")
+                print(f"   Confidence: {result['confidence']:.1f}%")
+        
+        camera.set_detection_callback(detection_callback)
+        if not camera.start_capture():
+            print("Failed to start camera capture!")
+            return None
+        
+        print("\nCamera test running...")
+        print("You should see a window with the camera feed")
+        print("Show different materials to test detection")
+        print("Press 'q' to quit\n")
+        
+        # Create named window
+        cv2.namedWindow('Camera Test', cv2.WINDOW_NORMAL)
+        
         while True:
             frame = camera.get_frame()
             if frame is not None:
                 cv2.imshow('Camera Test', frame)
+                print("Frame captured", end='\r')
+            else:
+                print("No frame available", end='\r')
             
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
                 break
             
             time.sleep(0.1)
             
+    except Exception as e:
+        print(f"\nCamera test error: {e}")
+        return None
     finally:
-        camera.cleanup()
+        if 'camera' in locals():
+            camera.cleanup()
         cv2.destroyAllWindows()
         
     return camera

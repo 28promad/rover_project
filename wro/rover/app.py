@@ -1,272 +1,190 @@
 from flask import Flask, render_template, request, Response, jsonify
 import cv2
-import numpy as np
-import json
-import base64
-from datetime import datetime
-import threading
 import time
-from ultrasonic_sensor import UltrasonicSensor
+import threading
+from datetime import datetime
+
+# Import modular components
+from camera import CameraHandler
+from color import ColorDetector
+from data import DataLogger
+from led import LEDController
+from ultrasonic import UltrasonicSensor
 
 app = Flask(__name__)
 
-# Global variables for video stream
-current_frame = None
-video_available = False
-detection_results = {}
-use_pi_camera = False # Set to True if using Raspberry Pi camera
-# Initialize the sensor (adjust pins as needed)
-sensor = UltrasonicSensor(trig_pin=18, echo_pin=24, detection_distance=20)
+# Global system components
+sensor = None
+led_controller = None
+logger = None
+camera_handler = None
+color_detector = None
 
+# System state
+system_initialized = False
+current_detection = {'detected': False, 'material': None, 'confidence': 0, 'color': None}
+current_distance = None
 
-@app.route('/api/distance')
-def api_distance():
+def initialize_system():
+    """Initialize all system components"""
+    global sensor, led_controller, logger, camera_handler, color_detector, system_initialized
+    
     try:
-        distance = sensor.measure_distance()
-        return jsonify({'distance_cm': distance})
+        # Initialize data logger
+        logger = DataLogger('rover_log.json', max_entries=1000)
+        logger.log_system_event('startup', 'System initialization started')
+        
+        # Initialize ultrasonic sensor
+        sensor = UltrasonicSensor(trig_pin=18, echo_pin=24, detection_distance=50)
+        
+        # Initialize LED controller
+        led_pins = {
+            'red': 12,    # Red color detection
+            'green': 16,  # Green color detection  
+            'blue': 20,   # Brown color detection (using blue LED)
+            'status': 21  # System status
+        }
+        led_controller = LEDController(led_pins)
+        
+        # Initialize color detector and camera
+        color_detector = ColorDetector()
+        camera_handler = CameraHandler(camera_index=0, resolution=(640, 480))
+        camera_handler.set_detection_callback(handle_color_detection)
+        
+        # Start camera capture
+        if camera_handler.start_capture():
+            logger.log_system_event('info', 'Camera capture started')
+        else:
+            logger.log_system_event('error', 'Failed to start camera')
+        
+        # Test LEDs
+        led_controller.test_all_leds(0.3)
+        led_controller.set_system_status('ready')
+        
+        # Start sensor monitoring thread
+        sensor_thread = threading.Thread(target=sensor_monitor_thread, daemon=True)
+        sensor_thread.start()
+        
+        system_initialized = True
+        logger.log_system_event('startup', 'System initialized successfully')
+        print("✓ Rover system initialization complete!")
+        
     except Exception as e:
-        return jsonify({'distance_cm': None, 'error': str(e)})
+        logger.log_system_event('error', f'System initialization failed: {str(e)}')
+        print(f"✗ System initialization failed: {e}")
+        system_initialized = False
 
-# Color detection ranges (HSV)
-COLOR_RANGES = {
-    'red': {
-        'lower': np.array([0, 120, 70]),
-        'upper': np.array([10, 255, 255]),
-        'material': 'palladium'
-    },
-    'brown': {
-        'lower': np.array([10, 50, 20]),
-        'upper': np.array([20, 255, 200]),
-        'material': 'dirt'
-    },
-    'green': {
-        'lower': np.array([40, 40, 40]),
-        'upper': np.array([80, 255, 255]),
-        'material': 'copper'
-    }
-}
+def handle_color_detection(detection_result):
+    """Handle color detection events"""
+    global current_detection, led_controller, logger
+    
+    current_detection = detection_result
+    if detection_result['detected']:
+        color = detection_result['color']
+        confidence = detection_result['confidence']
+        material = detection_result['material']
+        
+        logger.log_color_detection(color, material, confidence, True)
+        led_controller.handle_color_detection(color, confidence)
+        print(f"🎯 {color.upper()} detected: {material} ({confidence:.1f}%)")
 
-def detect_colored_objects(frame):
-    """
-    Detect colored objects in frame and return material type
+def sensor_monitor_thread():
+    """Background thread to monitor ultrasonic sensor"""
+    global current_distance, sensor, logger
     
-    Args:
-        frame: OpenCV frame
-        
-    Returns:
-        dict: Detection results
-    """
-    if frame is None:
-        return {'detected': False, 'material': None, 'confidence': 0}
-    
-    # Convert to HSV
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-    best_match = {'detected': False, 'material': None, 'confidence': 0, 'color': None}
-    
-    for color_name, color_info in COLOR_RANGES.items():
-        # Create mask
-        mask = cv2.inRange(hsv, color_info['lower'], color_info['upper'])
-        
-        # Calculate percentage of pixels matching color
-        total_pixels = mask.shape[0] * mask.shape[1]
-        colored_pixels = cv2.countNonZero(mask)
-        confidence = (colored_pixels / total_pixels) * 100
-        
-        # If this color has higher confidence and meets threshold
-        if confidence > best_match['confidence'] and confidence > 5:  # 5% threshold
-            best_match = {
-                'detected': True,
-                'material': color_info['material'],
-                'confidence': round(confidence, 2),
-                'color': color_name
-            }
-    
-    return best_match
-
-def log_mining_data(distance, material_detected, material_type=None, confidence=0):
-    """
-    Log mining data to JSON file
-    
-    Args:
-        distance: Distance from ultrasonic sensor
-        material_detected: Boolean if material was detected
-        material_type: Type of material detected
-        confidence: Confidence level of detection
-    """
-    log_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "distance_cm": distance,
-        "material_detected": material_detected,
-        "material_type": material_type,
-        "confidence": confidence,
-        "action": "mining" if material_detected else "scanning"
-    }
-    
-    try:
-        with open('log.json', 'r') as f:
-            logs = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        logs = []
-    
-    logs.append(log_entry)
-    logs = logs[-100:]  # Keep last 100 entries
-    
-    with open('log.json', 'w') as f:
-        json.dump(logs, f, indent=2)
+    while system_initialized:
+        try:
+            if sensor:
+                distance = sensor.measure_distance()
+                if distance is not None:
+                    current_distance = distance
+                    detected = distance <= sensor.detection_distance
+                    logger.log_sensor_data(distance, detected)
+                time.sleep(0.5)  # Update every 500ms
+        except Exception as e:
+            logger.log_system_event('error', f'Sensor error: {str(e)}')
+            time.sleep(5)
 
 @app.route('/')
 def index():
-    """
-    Main page with rover controls
-    """
+    """Main dashboard"""
     return render_template('index.html')
-
-@app.route('/send-video', methods=['GET', 'POST'])
-def send_video():
-    global current_frame, video_available, detection_results
-    if request.method == 'POST':
-        data = request.get_json()
-        if 'frame' in data:
-            try:
-                img_data = base64.b64decode(data['frame'].split(',')[1])
-                nparr = np.frombuffer(img_data, np.uint8)
-                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                # Resize to 320x240 for lower latency
-                frame = cv2.resize(frame, (320, 240))
-                current_frame = frame
-                video_available = True
-                detection_results = detect_colored_objects(frame)
-                return jsonify({'status': 'success', 'detection': detection_results})
-            except Exception as e:
-                return jsonify({'status': 'error', 'message': str(e)})
-    return render_template('send_video.html')
-
-
-# --- Pi Camera Thread ---
-def pi_camera_stream():
-    global current_frame, video_available, detection_results
-    cap = cv2.VideoCapture(0)  # 0 is usually the Pi camera
-    while use_pi_camera:
-        ret, frame = cap.read()
-        if ret:
-            # Resize for lower latency
-            frame = cv2.resize(frame, (320, 240))
-            current_frame = frame
-            video_available = True
-            detection_results = detect_colored_objects(frame)
-        time.sleep(0.05)  # ~20 FPS
-    cap.release()
-
-# Start Pi camera thread if enabled
-if use_pi_camera:
-    threading.Thread(target=pi_camera_stream, daemon=True).start()
-
 
 @app.route('/video_feed')
 def video_feed():
+    """Video stream endpoint"""
     def generate():
-        global current_frame, video_available
         while True:
-            if video_available and current_frame is not None:
-                # Ensure playback is also 320x240
-                frame = cv2.resize(current_frame, (320, 240))
-                ret, buffer = cv2.imencode('.jpg', frame)
-                if ret:
-                    frame_bytes = buffer.tobytes()
+            if camera_handler:
+                frame = camera_handler.get_frame_as_jpeg()
+                if frame:
                     yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            else:
-                placeholder = np.zeros((240, 320, 3), dtype=np.uint8)
-                cv2.putText(placeholder, 'No Video Available', (30, 120),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                ret, buffer = cv2.imencode('.jpg', placeholder)
-                if ret:
-                    frame_bytes = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            time.sleep(0.05)  # 20 FPS
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            time.sleep(0.1)
+    
+    return Response(generate(),
+                   mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/logs')
-def logs():
-    """
-    Display logs page
-    """
+@app.route('/api/system_status')
+def api_system_status():
+    """Get system status"""
+    return jsonify({
+        'initialized': system_initialized,
+        'distance': current_distance,
+        'detection': current_detection,
+        'camera_status': camera_handler.get_camera_info() if camera_handler else None
+    })
+
+@app.route('/api/led/<led_name>/<action>', methods=['POST'])
+def api_led_control(led_name, action):
+    """Control individual LEDs"""
     try:
-        with open('log.json', 'r') as f:
-            logs = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        logs = []
-    
-    return render_template('logs.html', logs=logs)
-
-@app.route('/manage')
-def manage():
-    """
-    Management page with live feed and log data
-    """
-    try:
-        with open('log.json', 'r') as f:
-            logs = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        logs = []
-    
-    return render_template('manage.html', logs=logs, video_available=video_available)
-
-@app.route('/api/logs')
-def api_logs():
-    """
-    API endpoint to get logs as JSON
-    """
-    try:
-        with open('log.json', 'r') as f:
-            logs = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        logs = []
-    
-    return jsonify(logs)
-
-@app.route('/api/detection')
-def api_detection():
-    """
-    API endpoint to get current detection results
-    """
-    global detection_results
-    return jsonify(detection_results)
-
-@app.route('/api/mine', methods=['POST'])
-def api_mine():
-    """
-    API endpoint to trigger mining action
-    """
-    global detection_results
-    
-    data = request.get_json()
-    distance = data.get('distance', 0)
-    
-    if detection_results.get('detected', False):
-        material_type = detection_results.get('material')
-        confidence = detection_results.get('confidence', 0)
+        if not led_controller:
+            return jsonify({'error': 'LED controller not initialized'}), 500
         
-        log_mining_data(distance, True, material_type, confidence)
-        
-        return jsonify({
-            'status': 'mining',
-            'material': material_type,
-            'confidence': confidence,
-            'message': f'Mining {material_type} detected!'
-        })
-    else:
-        log_mining_data(distance, False)
-        return jsonify({
-            'status': 'no_target',
-            'message': 'No valuable material detected'
-        })
+        success = False
+        if action == 'on':
+            success = led_controller.turn_on(led_name)
+        elif action == 'off':
+            success = led_controller.turn_off(led_name)
+        elif action == 'blink':
+            led_controller.blink(led_name, 0.5)
+            success = True
+            
+        if success:
+            logger.log_led_event(led_name, action)
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'error': f'Failed to {action} LED {led_name}'}), 400
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def cleanup_system():
+    """Clean up system resources"""
+    global sensor, led_controller, camera_handler, logger
+    
+    print("Cleaning up system resources...")
+    
+    if logger:
+        logger.log_system_event('shutdown', 'System shutdown initiated')
+    
+    if camera_handler:
+        camera_handler.cleanup()
+    
+    if led_controller:
+        led_controller.cleanup()
+    
+    if sensor:
+        sensor.cleanup()
+    
+    print("System cleanup completed")
+
+# Register cleanup handler
+atexit.register(cleanup_system)
+
+# Initialize system on startup
+initialize_system()
 
 if __name__ == '__main__':
-    # Create templates directory structure if it doesn't exist
-    import os
-    os.makedirs('templates', exist_ok=True)
-    
     app.run(host='0.0.0.0', port=5000, debug=True)
